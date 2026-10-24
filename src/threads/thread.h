@@ -4,6 +4,17 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include "threads/synch.h"
+
+struct lock;
+struct file;
+
+struct file_desc
+  {
+    int fd;
+    struct file *file;
+    struct list_elem elem;
+  };
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -18,6 +29,19 @@ enum thread_status
    You can redefine this to whatever type you like. */
 typedef int tid_t;
 #define TID_ERROR ((tid_t) -1)          /* Error value for tid_t. */
+
+struct child_info
+  {
+    tid_t tid;
+    struct list_elem elem;
+    struct semaphore load_sema;
+    struct semaphore wait_sema;
+    bool load_success;
+    bool waited;
+    bool parent_alive;
+    bool child_alive;
+    int exit_status;
+  };
 
 /* Thread priorities. */
 #define PRI_MIN 0                       /* Lowest priority. */
@@ -88,7 +112,20 @@ struct thread
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
+    int base_priority;                  /* Priority before donation. */
+    int nice;                           /* MLFQS nice value. */
+    int recent_cpu;                     /* MLFQS recent CPU, fixed point. */
+    struct lock *waiting_lock;          /* Lock this thread is waiting for. */
+    struct list_elem sleep_elem;        /* Element in timer sleep list. */
+    int64_t wake_tick;                  /* Timer tick at which to wake. */
     struct list_elem allelem;           /* List element for all threads list. */
+    struct list children;               /* Child process records. */
+    struct child_info *child_record;    /* Record owned with parent. */
+    int exit_status;                    /* Status reported at exit. */
+    bool user_process;                  /* True for a user process. */
+    struct file *executable;            /* Running executable. */
+    struct list file_descriptors;       /* Open files for this process. */
+    int next_fd;                        /* Next file descriptor number. */
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
@@ -125,6 +162,9 @@ const char *thread_name (void);
 
 void thread_exit (void) NO_RETURN;
 void thread_yield (void);
+void thread_check_preempt (void);
+void thread_donate (struct lock *);
+void thread_lock_released (struct lock *);
 
 /* Performs some operation on thread t, given auxiliary data AUX. */
 typedef void thread_action_func (struct thread *t, void *aux);
