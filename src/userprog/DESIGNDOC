@@ -23,7 +23,22 @@ threads/thread.[ch].  The file system code is unmodified.
 >> preparing your submission, other than the Pintos documentation, course
 >> text, lecture notes, and course staff.
 
-None.
+Besides the Pintos manual (Project 2 chapter, esp. "Accessing User
+Memory", "80x86 Calling Convention" and "Program Startup Details"):
+
+  - JHU CS 318 Project 2 handout (branch layout, test workflow):
+    https://www.cs.jhu.edu/~huang/cs318/fall22/project/project2.html
+  - UC Berkeley CS 162 Pintos docs, argument passing / stack layout:
+    https://cs162.org/static/proj/pintos-docs/docs/userprog/program-startup/
+    https://cs162.org/static/proj/pintos-docs/docs/userprog/calling-convention/
+  - Virginia Tech CS 3204 Project 2 session slides (requirements
+    overview, setup_stack() hints, deny-write lifetime):
+    https://courses.cs.vt.edu/~cs3204/spring2007/pintos/Project2SessionSpring2007.pdf
+  - Northeastern CS 5600 Pintos Project 2 notes (int 0x30 syscall
+    path, required syscall set):
+    https://khoury.northeastern.edu/home/skotthe/classes/cs5600/fall/2016/notes/pintos-project2.pdf
+
+No code was copied from any of these.
 
 			   ARGUMENT PASSING
 			   ================
