@@ -269,7 +269,7 @@ make check
 Result:
 
 ```text
-160 tests passed
+80 tests passed
 0 tests failed
 ```
 
