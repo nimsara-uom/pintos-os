@@ -27,6 +27,7 @@ struct start_info
   };
 
 static thread_func start_process NO_RETURN;
+static void release_child (struct child_info *, bool is_parent);
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 
 /* Starts a new thread running a user program loaded from
@@ -101,12 +102,28 @@ process_execute (const char *file_name)
   if (!child->load_success)
     {
       list_remove (&child->elem);
-      child->parent_alive = false;
-      if (!child->child_alive)
-        free (child);
+      release_child (child, true);
       return TID_ERROR;
     }
   return tid;
+}
+
+/* Drops one owner (parent or child) of shared record C and frees
+   it when both are gone.  Interrupts are disabled so parent and
+   child cannot both decide to free it, or both skip freeing it. */
+static void
+release_child (struct child_info *c, bool is_parent)
+{
+  enum intr_level old_level = intr_disable ();
+  bool last;
+  if (is_parent)
+    c->parent_alive = false;
+  else
+    c->child_alive = false;
+  last = !c->parent_alive && !c->child_alive;
+  intr_set_level (old_level);
+  if (last)
+    free (c);
 }
 
 /* A thread function that loads a user process and starts it
@@ -179,9 +196,7 @@ process_wait (tid_t child_tid)
   {
     int status = child->exit_status;
     list_remove (&child->elem);
-    child->parent_alive = false;
-    if (!child->child_alive)
-      free (child);
+    release_child (child, true);
     return status;
   }
 }
@@ -201,17 +216,13 @@ process_exit (void)
           struct child_info *child =
             list_entry (list_pop_front (&cur->children),
                         struct child_info, elem);
-          child->parent_alive = false;
-          if (!child->child_alive)
-            free (child);
+          release_child (child, true);
         }
       if (cur->child_record != NULL)
         {
           cur->child_record->exit_status = cur->exit_status;
-          cur->child_record->child_alive = false;
           sema_up (&cur->child_record->wait_sema);
-          if (!cur->child_record->parent_alive)
-            free (cur->child_record);
+          release_child (cur->child_record, false);
         }
       while (!list_empty (&cur->file_descriptors))
         {
@@ -603,19 +614,29 @@ setup_stack (void **esp, const char *cmdline)
           char *save_ptr;
           char *token;
           int argc = 0;
+          size_t total = 0;
           uintptr_t *argv;
           int i;
 
+          /* KPAGE is now owned by the page table, which frees it. */
           if (copy == NULL)
-            {
-              palloc_free_page (kpage);
-              return false;
-            }
+            return false;
           strlcpy (copy, cmdline, PGSIZE);
           for (token = strtok_r (copy, " ", &save_ptr);
                token != NULL && argc < 128;
                token = strtok_r (NULL, " ", &save_ptr))
-            tokens[argc++] = token;
+            {
+              tokens[argc++] = token;
+              total += strlen (token) + 1;
+            }
+
+          /* Strings + alignment + argv[] + NULL + argv + argc + return
+             address must fit in the single stack page. */
+          if (total + 3 + (argc + 4) * sizeof (char *) > PGSIZE)
+            {
+              palloc_free_page (copy);
+              return false;
+            }
 
           *esp = PHYS_BASE;
           for (i = argc - 1; i >= 0; i--)
