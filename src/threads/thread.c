@@ -228,6 +228,7 @@ thread_create (const char *name, int priority,
 
   /* Add to run queue. */
   thread_unblock (t);
+  thread_check_preempt ();
 
   return tid;
 }
@@ -268,7 +269,6 @@ thread_unblock (struct thread *t)
   list_insert_ordered (&ready_list, &t->elem, priority_less, NULL);
   t->status = THREAD_READY;
   intr_set_level (old_level);
-  thread_check_preempt ();
 }
 
 /* Returns the name of the running thread. */
@@ -499,6 +499,13 @@ init_thread (struct thread *t, const char *name, int priority)
   t->base_priority = priority;
   t->nice = 0;
   t->recent_cpu = 0;
+  list_init (&t->children);
+  list_init (&t->file_descriptors);
+  t->next_fd = 2;
+  t->child_record = NULL;
+  t->exit_status = -1;
+  t->user_process = false;
+  t->executable = NULL;
   t->magic = THREAD_MAGIC;
 
   old_level = intr_disable ();
